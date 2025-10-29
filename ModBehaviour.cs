@@ -429,8 +429,10 @@ namespace ModPerformanceMonitor
 
             // 更新UI
             TextMeshProUGUI text = textGO.GetComponent<TextMeshProUGUI>();
-            // Debug.Log($"Updating text...{text}");
-            text.text = $"FPS: {fps:F0}\n帧时间: {frameTime:F2} ms\n耗时占比(近{timeWindowLength}秒):\n" + string.Join("\n", displayList.Take(20).Select(kv => $"{GetModDisplayName(kv.Key)}: {kv.Value / timeWindowLength / 10:F2}%"));
+
+            // 窗口期总耗时/窗口期时间 ≈ 帧耗时/帧生成时间
+            // kv.Value(ms) / 1000 / timeWindowLength(s) * 100(%)
+            text.text = $"FPS: {fps:F0}\n帧生成时间: {frameTime:F2} ms\n耗时/帧生成时间(近{timeWindowLength}秒):\n" + string.Join("\n", displayList.Take(20).Select(kv => $"{GetModDisplayName(kv.Key)}: {kv.Value / timeWindowLength / 10:F2}%"));
         }
     }
 }
