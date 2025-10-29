@@ -38,7 +38,7 @@ namespace ModPerformanceMonitor
         [ThreadStatic]
         private static Dictionary<Assembly, Stopwatch>? stopwatches;
 
-        private List<KeyValuePair<Assembly, float>> displayList = new List<KeyValuePair<Assembly, float>>();
+        private List<KeyValuePair<string, float>> displayList = new List<KeyValuePair<string, float>>();
 
         // GUI刷新
         public const float displayFlushInterval = 1f;
@@ -210,6 +210,7 @@ namespace ModPerformanceMonitor
                     ).Where(m =>
                         !m.Name.Contains("<") &&
                         !m.Name.Contains(">") &&
+                        m.GetMethodBody()?.GetILAsByteArray().Length > 10 &&
                         DontPatch(m) == false
                     );
 
@@ -422,8 +423,13 @@ namespace ModPerformanceMonitor
                     assemblyTotals[asm] -= queue.Dequeue().duration;
 
                 float total = assemblyTotals[asm];
-                displayList.Add(new KeyValuePair<Assembly, float>(asm, total));
+                displayList.Add(new KeyValuePair<string, float>(GetModDisplayName(asm), total));
             }
+
+            displayList.Add(new KeyValuePair<string, float>(
+                "游戏本体+监测外",
+                timeWindowLength * 1000 - displayList.Sum(kv => kv.Value)
+            ));
 
             displayList.Sort((a, b) => b.Value.CompareTo(a.Value));
 
@@ -432,7 +438,7 @@ namespace ModPerformanceMonitor
 
             // 窗口期总耗时/窗口期时间 ≈ 帧耗时/帧生成时间
             // kv.Value(ms) / 1000 / timeWindowLength(s) * 100(%)
-            text.text = $"FPS: {fps:F0}\n帧生成时间: {frameTime:F2} ms\n耗时/帧生成时间(近{timeWindowLength}秒):\n" + string.Join("\n", displayList.Take(20).Select(kv => $"{GetModDisplayName(kv.Key)}: {kv.Value / timeWindowLength / 10:F2}%"));
+            text.text = $"FPS: {fps:F0}\n帧生成时间: {frameTime:F2} ms\n耗时/帧生成时间(近{timeWindowLength}秒):\n" + string.Join("\n", displayList.Take(20).Select(kv => $"{kv.Key}: {kv.Value / timeWindowLength / 10:F2}%"));
         }
     }
 }
