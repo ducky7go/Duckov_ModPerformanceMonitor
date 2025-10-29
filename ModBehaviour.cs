@@ -10,6 +10,8 @@ using TMPro;
 using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.UI;
+using Mono.Cecil;
+using Mono.Cecil.Cil;
 using Debug = UnityEngine.Debug;
 
 namespace ModPerformanceMonitor
@@ -98,6 +100,76 @@ namespace ModPerformanceMonitor
             return type?.Name.Contains("Harmony") == true;
         }
 
+        public static bool DontPatch(MethodInfo? methodInfo)
+        {
+            // 1. 检查 methodInfo 是否为 null
+            if (methodInfo == null)
+            {
+                return true;
+            }
+
+            // 2. 获取程序集路径，并检查文件是否存在
+            string assemblyPath = methodInfo.DeclaringType.Assembly.Location;
+            if (string.IsNullOrEmpty(assemblyPath) || !File.Exists(assemblyPath))
+            {
+                return true;
+            }
+
+            // 3. 尝试加载程序集
+            AssemblyDefinition? assembly = null;
+            try
+            {
+                assembly = AssemblyDefinition.ReadAssembly(assemblyPath);
+            }
+            catch (Exception)
+            {
+                // 如果程序集加载失败，直接返回 true
+                return true;
+            }
+
+            if (assembly == null)
+            {
+                // 如果程序集仍然为 null，直接返回 true
+                return true;
+            }
+
+            // 4. 获取目标类型
+            var typeDefinition = assembly.MainModule.GetType(methodInfo.DeclaringType.FullName);
+            if (typeDefinition == null)
+            {
+                // 如果找不到类型，直接跳过并返回 true
+                return true;
+            }
+
+            // 5. 查找目标方法
+            var methodDefinition = typeDefinition.Methods.FirstOrDefault(m => m.Name == methodInfo.Name && m.HasBody);
+            if (methodDefinition == null)
+            {
+                // 如果没有找到目标方法，直接跳过并返回 true
+                return true;
+            }
+
+            // 6. 遍历 IL 指令并检查是否调用了 Harmony 类中的 'patch' 方法
+            foreach (var instruction in methodDefinition.Body.Instructions)
+            {
+                if (instruction.OpCode == OpCodes.Call || instruction.OpCode == OpCodes.Callvirt)
+                {
+                    var methodReference = instruction.Operand as MethodReference;
+                    if (methodReference != null)
+                    {
+                        // 检查是否调用了 Harmony 的 patch 方法
+                        if (methodReference.DeclaringType.FullName.Contains("HarmonyLib.Harmony") &&
+                            methodReference.Name.ToLower().Contains("patch"))
+                        {
+                            return true; // 找到匹配的调用，返回 true
+                        }
+                    }
+                }
+            }
+
+            return false; // 没有找到调用
+        }
+
         private void PatchAssembly(Assembly asm)
         {
             try
@@ -137,7 +209,8 @@ namespace ModPerformanceMonitor
                         BindingFlags.DeclaredOnly‌
                     ).Where(m =>
                         !m.Name.Contains("<") &&
-                        !m.Name.Contains(">")
+                        !m.Name.Contains(">") &&
+                        DontPatch(m) == false
                     );
 
                     if(methods.Any())
@@ -145,9 +218,6 @@ namespace ModPerformanceMonitor
 
                     foreach (var method in methods)
                     {
-                        // if (type.Namespace.Contains("NoConsumption") && (method.Name.Contains("Start") || method.Name.Contains("OnDestroy")))
-                        //     continue;
-
                         if (asm == Assembly.GetExecutingAssembly() &&
                             method.Name != nameof(Update) &&
                             method.Name != nameof(OnGUI))
