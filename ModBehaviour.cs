@@ -179,9 +179,14 @@ namespace ModPerformanceMonitor
                 if (!types.Any(t => t.IsSubclassOf(typeof(Duckov.Modding.ModBehaviour))))
                     return;
 
+                // 获取程序集的根名称空间
+                string assemblyRootNamespace = asm.GetName().Name ?? "";
+
                 var filtered = types.Where(t =>
                     !t.Name.Contains("<") &&
                     !t.Name.Contains(">") &&
+                    // 只包含与程序集根名称空间相同的类型
+                    (string.IsNullOrEmpty(t.Namespace) || t.Namespace.Split('.')[0] == assemblyRootNamespace.Split('.')[0]) &&
                     t.GetMethods(
                         BindingFlags.Instance | BindingFlags.Static |
                         BindingFlags.Public | BindingFlags.NonPublic |
